@@ -20,16 +20,17 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1626704917,
-        "narHash": "sha256-cJ73kxY5ZCPWQeQZyCSdvkBqjqJkU5wgETBNaXfqF18=",
-        "owner": "matthewbauer",
+        "lastModified": 1708547917,
+        "narHash": "sha256-76tckr5VQsB1oR9VmzlLMQxThYLwEzVYHtO2PveFkE4=",
+        "owner": "dpc",
         "repo": "nix-bundle",
-        "rev": "223f4ffc4179aa318c34dc873a08cb00090db829",
+        "rev": "ec52fce86513d73e989c6cff0367956c6b07a1ba",
         "type": "github"
       },
       "original": {
-        "owner": "matthewbauer",
+        "owner": "dpc",
         "repo": "nix-bundle",
+        "rev": "ec52fce86513d73e989c6cff0367956c6b07a1ba",
         "type": "github"
       }
     },

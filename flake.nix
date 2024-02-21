@@ -8,9 +8,10 @@
   description = "Example bundlers";
 
   inputs.nix-utils.url = "github:juliosueiras-nix/nix-utils";
-  inputs.nix-bundle.url = "github:matthewbauer/nix-bundle";
+  inputs.nix-bundle.url = "github:dpc/nix-bundle?branch=master&rev=8ab9acfe0a31805de7899eddb8f3312d4e34a13d";
 
-  outputs = { self, nixpkgs, nix-bundle, nix-utils }: let
+  outputs = { self, nixpkgs, nix-bundle, nix-utils }:
+    let
       # System types to support.
       supportedSystems = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ];
 
@@ -28,61 +29,73 @@
       }";
 
       protect = drv: if drv?outPath then drv else throw "provided installable is not a derivation and not coercible to an outPath";
-  in {
-    defaultBundler = builtins.listToAttrs (map (system: {
-        name = system;
-        value = drv: self.bundlers.${system}.toArx (protect drv);
-      }) supportedSystems)
+    in
+    {
+      defaultBundler = builtins.listToAttrs
+        (map
+          (system: {
+            name = system;
+            value = drv: self.bundlers.${system}.toArx (protect drv);
+          })
+          supportedSystems)
       # Backwards compatibility helper for pre Nix2.6 bundler API
-      // {__functor = s: nix-bundle.bundlers.nix-bundle;};
+      // { __functor = s: nix-bundle.bundlers.nix-bundle; };
 
-    bundlers = let n =
-      (forAllSystems (system: {
+      bundlers =
+        let
+          n =
+            (forAllSystems (system: {
+              # Backwards compatibility helper for pre Nix2.6 bundler API
+              toArx = drv: (nix-bundle.bundlers.nix-bundle ({
+                program = if drv?program then drv.program else (program drv);
+                inherit system;
+              })) // (if drv?program then { } else {
+                name =
+                  (builtins.parseDrvName drv.name).name;
+              });
+
+              toRPM = drv: nix-utils.bundlers.rpm { inherit system; program = program drv; };
+
+              toDEB = drv: nix-utils.bundlers.deb { inherit system; program = program drv; };
+
+              toDockerImage = { ... }@drv:
+                (nixpkgs.legacyPackages.${system}.dockerTools.buildLayeredImage {
+                  name = drv.name or drv.pname or "image";
+                  tag = "latest";
+                  contents = if drv?outPath then drv else throw "provided installable is not a derivation and not coercible to an outPath";
+                });
+
+              toBuildDerivation = drv:
+                (import ./report/default.nix {
+                  drv = protect drv;
+                  pkgs = nixpkgsFor.${system};
+                }).buildtimeDerivations;
+
+              toReport = drv:
+                (import ./report/default.nix {
+                  drv = protect drv;
+                  pkgs = nixpkgsFor.${system};
+                }).runtimeReport;
+
+              identity = drv: drv;
+            }
+            ));
+        in
+        with builtins;
         # Backwards compatibility helper for pre Nix2.6 bundler API
-        toArx = drv: (nix-bundle.bundlers.nix-bundle ({
-          program = if drv?program then drv.program else (program drv);
-          inherit system;
-        })) // (if drv?program then {} else {name=
-          (builtins.parseDrvName drv.name).name;});
-
-      toRPM = drv: nix-utils.bundlers.rpm {inherit system; program=program drv;};
-
-      toDEB = drv: nix-utils.bundlers.deb {inherit system; program=program drv;};
-
-      toDockerImage = {...}@drv:
-        (nixpkgs.legacyPackages.${system}.dockerTools.buildLayeredImage {
-          name = drv.name or drv.pname or "image";
-          tag = "latest";
-          contents = if drv?outPath then drv else throw "provided installable is not a derivation and not coercible to an outPath";
-      });
-
-      toBuildDerivation = drv:
-        (import ./report/default.nix {
-          drv = protect drv;
-          pkgs = nixpkgsFor.${system};}).buildtimeDerivations;
-
-      toReport = drv:
-        (import ./report/default.nix {
-          drv = protect drv;
-          pkgs = nixpkgsFor.${system};}).runtimeReport;
-
-      identity = drv: drv;
-    }
-    ));
-    in with builtins;
-    # Backwards compatibility helper for pre Nix2.6 bundler API
-    listToAttrs (map
-      (name: {
-        inherit name;
-        value = builtins.trace "The bundler API has been updated to require the form `bundlers.<system>.<name>`. The previous API will be deprecated in Nix 2.7. See `https://github.com/NixOS/nix/pull/5456/`"
-        ({system,program}@drv: self.bundlers.${system}.${name}
-          (drv // {
-            name = baseNameOf drv.program;
-            outPath = dirOf (dirOf drv.program);
-          }));
-        })
-      (attrNames n.x86_64-linux))
-      //
-      n;
-  };
+        listToAttrs
+          (map
+            (name: {
+              inherit name;
+              value = builtins.trace "The bundler API has been updated to require the form `bundlers.<system>.<name>`. The previous API will be deprecated in Nix 2.7. See `https://github.com/NixOS/nix/pull/5456/`"
+                ({ system, program }@drv: self.bundlers.${system}.${name}
+                  (drv // {
+                    name = baseNameOf drv.program;
+                    outPath = dirOf (dirOf drv.program);
+                  }));
+            })
+            (attrNames n.x86_64-linux))
+        //
+        n;
+    };
 }
